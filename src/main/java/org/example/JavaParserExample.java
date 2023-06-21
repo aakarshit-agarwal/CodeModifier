@@ -6,21 +6,20 @@ import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
 import com.github.javaparser.ast.body.FieldDeclaration;
 import com.github.javaparser.ast.body.MethodDeclaration;
 import com.github.javaparser.ast.body.VariableDeclarator;
-import com.github.javaparser.ast.expr.Expression;
-import com.github.javaparser.ast.expr.MethodCallExpr;
-import com.github.javaparser.ast.expr.NameExpr;
-import com.github.javaparser.ast.stmt.BlockStmt;
-import com.github.javaparser.ast.type.Type;
+import com.github.javaparser.ast.expr.*;
 import com.github.javaparser.ast.visitor.ModifierVisitor;
 import com.github.javaparser.ast.visitor.Visitable;
+import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import org.slf4j.Logger;
 
 import java.io.*;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class JavaParserExample {
-    private static final String FILE_PATH = "D:\\Temp\\EDMBomItmDaoImpl2.java";
+    private static final String FILE_PATH = "D:\\Temp\\EDMBomItmDaoImpl.java";
 
     public static void main(String args[]) {
         CompilationUnit cu = null;
@@ -34,9 +33,54 @@ public class JavaParserExample {
 
         CompilationUnit cuModified = modifyFunctionDAOAndQueryString(cuChanged);
 
+//        // Collect all declared variables
+//        Set<String> declaredVariables = new HashSet<>();
+//        new VariableDeclarationVisitor().visit(cuModified, declaredVariables);
+//
+//        // Identify used variables
+//        Set<String> usedVariables = new HashSet<>();
+//        new VariableUsageVisitor().visit(cuModified, usedVariables);
+//
+//        // Identify unused variables
+//        Set<String> unusedVariables = new HashSet<>(declaredVariables);
+//        unusedVariables.removeAll(usedVariables);
 
-        saveJavaFile(cuModified, "D:\\Temp\\EDMBomItmDaoImplChanged2.java");
+        saveJavaFile(cuModified, "D:\\Temp\\EDMBomItmDaoImplChanged.java");
 
+    }
+
+    // Visitor to collect declared variables
+    private static class VariableDeclarationVisitor extends VoidVisitorAdapter<Set<String>> {
+        @Override
+        public void visit(FieldDeclaration fieldDeclaration, Set<String> declaredVariables) {
+            declaredVariables.add(fieldDeclaration.getVariable(0).getNameAsString());
+            System.out.println(fieldDeclaration.getVariable(0).getNameAsString());
+            super.visit(fieldDeclaration, declaredVariables);
+        }
+    }
+
+    // Visitor to collect used variables
+    private static class VariableUsageVisitor extends VoidVisitorAdapter<Set<String>> {
+        @Override
+        public void visit(com.github.javaparser.ast.expr.VariableDeclarationExpr variableDeclarationExpr, Set<String> usedVariables) {
+            variableDeclarationExpr.getVariables().forEach(variable -> usedVariables.add(variable.getNameAsString()));
+            super.visit(variableDeclarationExpr, usedVariables);
+        }
+    }
+
+    // Visitor to remove unused variables
+    private static class UnusedVariableRemovalVisitor extends VoidVisitorAdapter<Void> {
+        private final Set<String> unusedVariables;
+
+        public UnusedVariableRemovalVisitor(Set<String> unusedVariables) {
+            this.unusedVariables = unusedVariables;
+        }
+
+        @Override
+        public void visit(FieldDeclaration fieldDeclaration, Void arg) {
+            fieldDeclaration.getVariables().removeIf(variable -> unusedVariables.contains(variable.getNameAsString()));
+            super.visit(fieldDeclaration, arg);
+        }
     }
 
     private static CompilationUnit removeAdfDependencies(CompilationUnit cu) {
@@ -106,7 +150,7 @@ public class JavaParserExample {
             //step 2
             // Remove all occurrences of the queryString generation statement except the return statement
 
-            BlockStmt body = method.getBody().orElse(null);
+//            BlockStmt body = method.getBody().orElse(null);
 //            if (body != null) {
 //                List<Statement> statements = body.getStatements();
 //                for (Statement statement : statements) {
@@ -116,7 +160,7 @@ public class JavaParserExample {
 //                    }
 //                }
 //            }
-
+//
 //            if (body != null) {
 //                List<Statement> statements = body.getStatements();
 //                List<Statement> statementsToRemove = new ArrayList<>();
@@ -194,6 +238,25 @@ public class JavaParserExample {
                     i.set(i.get() + 1);
                 });
             });
+
+            List<VariableDeclarator> allVariables = new ArrayList<>(method.findAll(VariableDeclarator.class));
+
+            List<VariableDeclarator> usedVariables = new ArrayList<>();
+            method.findAll(VariableDeclarationExpr.class).forEach(expr -> {
+                expr.getVariables().forEach(variable -> {
+                    if(variable.getInitializer().toString().contains(variable.getName().toString())) {
+                        usedVariables.add(variable);
+                    }
+                });
+            });
+
+
+            allVariables.forEach(variable -> {
+                if(!usedVariables.contains(variable)) {
+                    variable.getParentNode().flatMap(Node::getParentNode).ifPresent(Node::remove);
+                }
+            });
+
 
 //            method.findAll(MethodDeclaration.class).forEach(innerMethodDeclaration -> {
 //                innerMethodDeclaration.findAll(MethodCallExpr.class).forEach(methodCallExpr -> {
