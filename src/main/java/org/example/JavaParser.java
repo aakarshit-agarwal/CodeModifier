@@ -18,72 +18,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class JavaParserExample {
-    private static final String FILE_PATH = "D:\\Temp\\EDMBomItmDaoImpl.java";
-
-    public static void main(String args[]) {
-        CompilationUnit cu = null;
-        try {
-            cu = StaticJavaParser.parse(new File(FILE_PATH));
-        } catch (FileNotFoundException e) {
-            e.printStackTrace();
-        }
-
-        CompilationUnit cuChanged = removeAdfDependencies(cu);
-
-        CompilationUnit cuModified = modifyFunctionDAOAndQueryString(cuChanged);
-
-//        // Collect all declared variables
-//        Set<String> declaredVariables = new HashSet<>();
-//        new VariableDeclarationVisitor().visit(cuModified, declaredVariables);
-//
-//        // Identify used variables
-//        Set<String> usedVariables = new HashSet<>();
-//        new VariableUsageVisitor().visit(cuModified, usedVariables);
-//
-//        // Identify unused variables
-//        Set<String> unusedVariables = new HashSet<>(declaredVariables);
-//        unusedVariables.removeAll(usedVariables);
-
-        saveJavaFile(cuModified, "D:\\Temp\\EDMBomItmDaoImplChanged.java");
-
-    }
-
-    // Visitor to collect declared variables
-    private static class VariableDeclarationVisitor extends VoidVisitorAdapter<Set<String>> {
-        @Override
-        public void visit(FieldDeclaration fieldDeclaration, Set<String> declaredVariables) {
-            declaredVariables.add(fieldDeclaration.getVariable(0).getNameAsString());
-            System.out.println(fieldDeclaration.getVariable(0).getNameAsString());
-            super.visit(fieldDeclaration, declaredVariables);
-        }
-    }
-
-    // Visitor to collect used variables
-    private static class VariableUsageVisitor extends VoidVisitorAdapter<Set<String>> {
-        @Override
-        public void visit(com.github.javaparser.ast.expr.VariableDeclarationExpr variableDeclarationExpr, Set<String> usedVariables) {
-            variableDeclarationExpr.getVariables().forEach(variable -> usedVariables.add(variable.getNameAsString()));
-            super.visit(variableDeclarationExpr, usedVariables);
-        }
-    }
-
-    // Visitor to remove unused variables
-    private static class UnusedVariableRemovalVisitor extends VoidVisitorAdapter<Void> {
-        private final Set<String> unusedVariables;
-
-        public UnusedVariableRemovalVisitor(Set<String> unusedVariables) {
-            this.unusedVariables = unusedVariables;
-        }
-
-        @Override
-        public void visit(FieldDeclaration fieldDeclaration, Void arg) {
-            fieldDeclaration.getVariables().removeIf(variable -> unusedVariables.contains(variable.getNameAsString()));
-            super.visit(fieldDeclaration, arg);
-        }
-    }
-
-    private static CompilationUnit removeAdfDependencies(CompilationUnit cu) {
+public class JavaParser {
+    public static CompilationUnit removeAdfDependencies(CompilationUnit cu) {
         cu.findAll(ImportDeclaration.class)
                 .stream()
                 .filter(importDecl -> importDecl.getName().asString().contains("adf"))
@@ -130,13 +66,7 @@ public class JavaParserExample {
         return cu;
     }
 
-//    private static CompilationUnit addLoggerStatementForClasses(CompilationUnit cu) {
-//        List<ClassDefinition> methods = cu.findAll(ClassDefinition.class);
-//        for (MethodDeclaration method : methods) {
-//        }
-//    }
-
-    private static CompilationUnit modifyFunctionDAOAndQueryString(CompilationUnit cu) {
+    public static CompilationUnit modifyFunctionDAOAndQueryString(CompilationUnit cu) {
         List<MethodDeclaration> methods = cu.findAll(MethodDeclaration.class);
         for (MethodDeclaration method : methods) {
 
@@ -145,40 +75,6 @@ public class JavaParserExample {
             method.addParameter("Map<String, Object>", "listOfMap");
             method.addParameter("String", "fldPrefix");
             method.addParameter("Map<String, Object>", "dataMap");
-
-
-            //step 2
-            // Remove all occurrences of the queryString generation statement except the return statement
-
-//            BlockStmt body = method.getBody().orElse(null);
-//            if (body != null) {
-//                List<Statement> statements = body.getStatements();
-//                for (Statement statement : statements) {
-//                    if (statement.toString().contains("queryString")) {
-//                        statements.remove(statement);
-//                        break; // Remove only the first occurrence
-//                    }
-//                }
-//            }
-//
-//            if (body != null) {
-//                List<Statement> statements = body.getStatements();
-//                List<Statement> statementsToRemove = new ArrayList<>();
-//                boolean returnStatementFound = false;
-//
-//                for (Statement statement : statements) {
-//                    if (statement.toString().contains("queryString")) {
-//                        if (statement.isReturnStmt()) {
-//                            returnStatementFound = true;
-//                        } else {
-//                            statementsToRemove.add(statement);
-//                        }
-//                    }
-//                }
-//                statements.removeAll(statementsToRemove);
-//
-//            }
-
 
             // Step 3: Modify the getting result part
             method.findAll(MethodCallExpr.class).forEach(methodCallExpr -> {
@@ -256,19 +152,6 @@ public class JavaParserExample {
                     variable.getParentNode().flatMap(Node::getParentNode).ifPresent(Node::remove);
                 }
             });
-
-
-//            method.findAll(MethodDeclaration.class).forEach(innerMethodDeclaration -> {
-//                innerMethodDeclaration.findAll(MethodCallExpr.class).forEach(methodCallExpr -> {
-//                    if (methodCallExpr.getTypeArguments().toString().contains("Map.Entry")) {
-//                        NodeList<Type> ty = methodCallExpr.getTypeArguments().get();
-//                        if (ty.contains("Map.Entry")) {
-//                            ty.toString().replace("Map.Entry", "Map");
-//                        }
-//                        methodCallExpr.setTypeArguments(ty);
-//                    }
-//                });
-//            });
         }
         return cu;
     }
@@ -278,7 +161,7 @@ public class JavaParserExample {
         return "SELECT * FROM table WHERE column = value";
     }
 
-    private static void saveJavaFile(CompilationUnit cu, String filePath) {
+    public static void saveJavaFile(CompilationUnit cu, String filePath) {
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(filePath))) {
             writer.write(cu.toString());
         } catch (IOException e) {
